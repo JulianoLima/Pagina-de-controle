@@ -9,7 +9,7 @@ hospedada no SharePoint/OneDrive, com geração de relatórios em PDF sob demand
 - **Tailwind CSS** + shadcn-style UI components
 - **Recharts** (gráficos)
 - **NextAuth.js** (autenticação via credenciais)
-- **Prisma + SQLite** (banco persistido localmente; pronto para trocar por Postgres)
+- **Prisma + PostgreSQL** (SQLite em dev é possível trocando o provider)
 - **Microsoft Graph API** (leitura da planilha do SharePoint/OneDrive)
 - **jsPDF + jsPDF-autoTable** (relatórios PDF)
 - **React Query** (polling + cache)
@@ -18,6 +18,7 @@ hospedada no SharePoint/OneDrive, com geração de relatórios em PDF sob demand
 
 - Node.js 18.18+ (ou 20+)
 - npm 9+
+- PostgreSQL (local via Docker, ou um banco remoto gratuito no [Neon](https://neon.tech)/[Supabase](https://supabase.com))
 - (Opcional para dados reais) App registrado no Entra ID (Azure AD)
 
 ## Setup rápido
@@ -132,16 +133,60 @@ src/
 | `npm run db:seed` | Cria o usuário admin inicial |
 | `npm run lint` | Linter |
 
-## Migrando para Postgres
+## Deploy no Vercel
 
-No `prisma/schema.prisma`, troque:
+### 1. Criar o banco no Neon (grátis)
+
+1. Acesse [console.neon.tech](https://console.neon.tech) e faça login com o GitHub.
+2. Crie um projeto e copie a **Connection string** (formato `postgresql://user:senha@host/db?sslmode=require`).
+
+### 2. Aplicar schema e seed no banco remoto (uma vez, do seu computador)
+
+```bash
+# Crie/edite .env.local com o DATABASE_URL do Neon
+echo 'DATABASE_URL="postgresql://user:senha@host/db?sslmode=require"' >> .env.local
+
+npx prisma db push
+npm run db:seed
+```
+
+### 3. Importar o projeto no Vercel
+
+1. [vercel.com/new](https://vercel.com/new) → selecione o repositório.
+2. Em **Environment Variables → Import .env**, faça upload de um `.env` com:
+   ```
+   DATABASE_URL=<connection do Neon>
+   NEXTAUTH_SECRET=<openssl rand -base64 32>
+   NEXTAUTH_URL=https://seu-projeto.vercel.app
+   USE_MOCK_DATA=true
+   SEED_ADMIN_EMAIL=juliano.lima@sebrae.com.br
+   SEED_ADMIN_NAME=Juliano Lima
+   SEED_ADMIN_PASSWORD=ChangeMe@123
+   CRON_SECRET=<openssl rand -base64 32>
+   ```
+3. Clique em **Deploy**.
+
+### 4. (Opcional) Conectar ao SharePoint real
+
+Adicione as variáveis `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`,
+`SHAREPOINT_USER_UPN`, `SHAREPOINT_FILE_PATH`, `SHAREPOINT_WORKSHEET` no Vercel,
+mude `USE_MOCK_DATA=false` e faça **Redeploy**.
+
+O arquivo `vercel.json` já registra um **Cron Job a cada 5 minutos** em
+`/api/sync/cron`, que mantém o banco em dia com a planilha mesmo sem usuários
+navegando no dashboard.
+
+## Usando SQLite em dev (alternativa a Postgres local)
+
+Em `prisma/schema.prisma`, troque:
 ```prisma
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 ```
-Atualize `DATABASE_URL` e rode `npx prisma migrate dev`.
+E no `.env.local`: `DATABASE_URL="file:./dev.db"`. Não esqueça de reverter antes
+de fazer deploy em produção.
 
 ## Segurança
 
