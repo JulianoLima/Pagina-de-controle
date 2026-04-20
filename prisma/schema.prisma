@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("VIEWER") // ADMIN | VIEWER
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Cada linha da planilha vira um registro aqui.
+// O campo "data" guarda o objeto completo como JSON (string) para flexibilidade
+// quando as colunas da planilha mudarem.
+model ProjectRow {
+  id           String   @id @default(cuid())
+  externalKey  String   @unique // chave derivada de col. da planilha (ex: código do projeto)
+  worksheet    String
+  rowIndex     Int
+  projectName  String?
+  status       String?
+  owner        String?
+  startDate    DateTime?
+  endDate      DateTime?
+  budget       Float?
+  executed     Float?
+  progress     Float?
+  data         String   // JSON serializado da linha inteira
+  syncedAt     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([owner])
+  @@index([worksheet])
+}
+
+model SyncLog {
+  id         String   @id @default(cuid())
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  rowsRead   Int      @default(0)
+  rowsUpsert Int      @default(0)
+  status     String   @default("running") // running | success | error
+  message    String?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  target    String?
+  metadata  String?
+  createdAt DateTime @default(now())
+}
